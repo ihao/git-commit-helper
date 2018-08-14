@@ -104,3 +104,9 @@ feat(#9528,#9527-1-2,@9000): 完成留言回复功能，并解决留言无法回
 ## 问题
 
 - no
+
+## Thanks
+
+- http://www.ruanyifeng.com/blog/2016/01/commit_message_change_log.html
+- https://github.com/tommarshall/git-good-commit
+- https://github.com/Michael-F-Bryan/auto-changelog
