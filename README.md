@@ -11,6 +11,8 @@
 
 ### 全局安装
 
+__注意：对新建项目有效，对原有项目无效！__
+
 将 `commit-msg` 放置到 `~/.git-template/hooks` 目录内
 
 ```bash
