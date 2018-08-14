@@ -1,0 +1,399 @@
+#!/bin/bash
+###  commit message helper
+###  luohao@uama.com.cn 2018 v0.1.0
+#######################################################################
+###  <type>(<scope>): <subject>
+###  <BLANK LINE>
+###  <body>
+###  <BLANK LINE>
+###  <footer>
+#######################################################################
+###  allowed type:
+###    feat:
+###      新的功能特性
+###      a new feature
+###    fix:
+###      BUG修复
+###      a bug fix
+###    docs:
+###      文档更新
+###      Documentation only changes
+###    style:
+###      与代码逻辑无关的样式修改（空格、格式、句尾结束符等）
+###      Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
+###    refactor:
+###      代码重构，但与修复bug或者新功能无关
+###      A code change that neither fixes a bug nor adds a feature
+###    perf:
+###      性能优化
+###      A code change that improves performance
+###    test:
+###      测试用例
+###      Adding missing tests
+###    chore:
+###      工程化更新（编译脚本、辅助工具等）
+###      Changes to the build process or auxiliary tools and libraries such as documentation generation
+#######################################################################
+###  fix(#9527-1-2,#9528,@9900-2,@9000): SUBJECT TITLE
+###
+###  contents line1....
+###  contents line2....
+###
+###  footer line...
+#######################################################################
+###  TODO:
+###      nothing.
+#######################################################################
+
+set -u
+set -e
+
+ZT_HOST=""
+ZT_USER=""
+ZT_PASS=""
+DEBUG_LEVEL=2
+
+COMMIT_MSG_FILE=$1
+COMMIT_CONTENT=
+COMMIT_FIRST_LINE=
+COMMIT_TOTAL_LINE=
+COMMIT_SUBJECT=
+COMMIT_TYPE=
+COMMIT_SCOPE=
+
+SCOPE_TASKS=
+SCOPE_TASKS_NUM=
+
+SCOPE_TASK_TYPE=
+SCOPE_TASK_PARAM=
+SCOPE_TASK_PARAMS=
+
+ZT_LOGIN_OK=
+ZT_SESSION=
+ZT_SESSION_NAME=
+
+_URL=
+_RST=
+
+ERR_SESSION_RST="[ERROR]101: Get session request error"
+ERR_SESSION_DATA="[ERROR]102: Get session result error"
+ERR_LOGIN="[ERROR]103: Shit happened when login to zentao with your account, please check account and password in this hook script [prepare-commit-msg] ."
+ERR_NO_FILE="[ERROR]105: Commit message file not exist"
+ERR_MSG_EMPTY="[ERROR]106: Commit message can not empty"
+ERR_MSG_FIRST_EMPTY="[ERROR]107: First line can not empty"
+ERR_MSG_LAST_PERIOD="[ERROR]108: Do not end the subject line with a period"
+ERR_MSG_BLANK_LINE="[ERROR]109: Separate subject from body with a blank line"
+ERR_MSG_TITLE_FORMAT="[ERROR]110: Title line bad format!\r\n<Type>(<Scope>): title\r\nType: feat|fix|docs|style|refactor|perf|test|chore\r\nScope: #taskid | #taskid-usedhours-lefthours | @bugid | @bugid-usedhours\r\nFinish Task Example: \r\nfeat(#1122): title content\r\n\r\ncontent description"
+ERR_DEBUG="[ERROR]200: Debug breaking..."
+
+#######################################################################
+# util functions
+#######################################################################
+# remove \" in json, and echo value for given key
+_parse_json(){
+    echo "${1//\\\"/}" | sed "s/.*$2:\([^,}]*\).*/\1/"
+}
+
+# simple url encode
+_url_encode(){
+    echo "$1" | tr -d '\n' | xxd -plain | sed 's/\(..\)/%\1/g'
+}
+
+# ouput more info when in debug mode
+_curl_bin(){
+    if [[ $DEBUG_LEVEL -gt 2 ]]; then
+        echo "curl -k -X"
+    else
+        echo "curl -s -k -X"
+    fi
+}
+
+_date_time(){
+    echo -e `date "+%Y-%m-%d %H:%M:%S"`
+}
+
+_date_fmt(){
+    echo -e `date "+%Y-%m-%d"`
+}
+
+log_error_exit(){
+    echo -e "$(log_title) [ERROR] $@"
+    exit 1
+}
+
+log_info(){
+    if [[ $DEBUG_LEVEL -gt 0 ]]; then
+        echo -e "$(log_title) [INFO] $@"
+    fi
+}
+
+log_debug(){
+    if [[ $DEBUG_LEVEL -gt 1 ]]; then
+        echo -e "$(log_title) [DEBUG] $@"
+    fi
+}
+
+log_title(){
+    if [[ $DEBUG_LEVEL -gt 1 ]]; then
+        echo -e "$(_date_time) (GITBOT)"
+    else
+        echo -e "(GITBOT)"
+    fi
+}
+
+
+#####################################################################
+# validator
+validator(){
+    log_debug "validator..."
+    # 日志信息文件存在
+    if [ ! -f "$COMMIT_MSG_FILE" ]; then
+        log_error_exit ${ERR_NO_FILE}
+    fi
+    # 读取提交消息内容
+    COMMIT_CONTENT=`cat ${COMMIT_MSG_FILE}`
+    COMMIT_FIRST_LINE=`echo "${COMMIT_CONTENT}" | head -1`
+    COMMIT_TOTAL_LINE=`echo "${COMMIT_CONTENT}" | wc -l`
+    validate_base_format
+    validate_scope_message
+}
+
+validate_base_format(){
+    # 校验整体格式是否合规
+    ##########################################################
+    # 1. 禁止空提交
+    if [[ ${#COMMIT_CONTENT} -lt 1 ]]; then
+        log_error_exit ${ERR_MSG_EMPTY}
+    fi
+    # 2.第一行不能为空
+    if [[ ${#COMMIT_FIRST_LINE} -lt 1 ]]; then
+        log_error_exit ${ERR_MSG_FIRST_EMPTY}
+    fi
+    # 3. 标题行不能以.结尾
+    if [[ ${COMMIT_FIRST_LINE} =~ ^.*\.$ ]]; then
+          log_error_exit ${ERR_MSG_LAST_PERIOD}
+    fi
+    # 4. 如果有提交正文说明，则检测标题行与正文之间必须要有空行
+    if [[ ${COMMIT_TOTAL_LINE} -gt 1 ]]; then
+        COMMIT_2D_LINE=`echo "${COMMIT_CONTENT}" | head -n 2 | tail -n 1`
+        # log_debug "2d line: ${COMMIT_2D_LINE}"
+        if [[ ${#COMMIT_2D_LINE} -gt 0 ]]; then
+            log_error_exit ${ERR_MSG_BLANK_LINE}
+        fi
+    fi
+    # 5. 检测第一行格式是否正确: Type(scope): title
+    if [[ ${COMMIT_FIRST_LINE} =~ ^(feat|fix|docs|style|refactor|perf|test|chore)([\(]?[0-9\#\@\,\-]*[\)]?):[[:blank:]]?(.*)$ ]]; then
+        COMMIT_TYPE=${BASH_REMATCH[1]}
+        COMMIT_SCOPE=${BASH_REMATCH[2]}
+        COMMIT_SUBJECT=${BASH_REMATCH[3]}
+    else
+        log_error_exit ${ERR_MSG_TITLE_FORMAT}
+    fi
+}
+
+# 校验socpe格式，处理多个任务
+validate_scope_message(){
+	if [[ ${#COMMIT_SCOPE} -lt 1 ]]; then
+	    log_info "no scope to process"
+	# validate scope format and get scope content
+	elif [[ ${COMMIT_SCOPE} =~ ^\(([\#\@][0-9\#\@\,\-]*)\)$ ]]; then
+		COMMIT_SCOPE_CONTENT=${BASH_REMATCH[1]}
+		if [[ ${#COMMIT_SCOPE_CONTENT} -lt 2 ]]; then
+			log_error_exit "scope bad format less 2 ${COMMIT_SCOPE_CONTENT}"
+		fi
+		# split to task array
+    	SCOPE_TASKS=(${COMMIT_SCOPE_CONTENT//,/ })
+		# log_debug "SCOPE_TASKS ${SCOPE_TASKS}"
+		SCOPE_TASKS_NUM=${#SCOPE_TASKS[@]}
+		# log_debug "SCOPE_TASKS_NUM ${SCOPE_TASKS_NUM}"
+		for ((i=0;i<$SCOPE_TASKS_NUM;i++)); do
+			if [[ ${#SCOPE_TASKS[i]} -lt 2 ]]; then
+				log_info "scope task bad format less 2 ${SCOPE_TASKS[i]}"
+			else
+				log_debug "task: ${SCOPE_TASKS[i]}"
+				process ${SCOPE_TASKS[i]}
+			fi
+		done
+	else
+		log_info "scope bad format ${COMMIT_SCOPE}"
+	fi
+}
+
+#####################################################################
+# process tasks
+process(){
+    # get first chactor
+    SCOPE_TASK_TYPE=`echo ${1:0:1}`
+    # log_debug "task type: ${SCOPE_TASK_TYPE}"
+    # 截取除第一个字符的余下字符串
+    SCOPE_TASK_PARAM=${1:1}
+	if [[ ${SCOPE_TASK_PARAM} =~ ^[0-9]+-*[0-9]*-*[0-9]*$ ]]; then
+		# log_debug "task param: ${SCOPE_TASK_PARAM}"
+		# 按 - 分隔获取所有参数 第一个为任务编号，第二个为所用时间，第三个为剩余时间
+		SCOPE_TASK_PARAMS=(${SCOPE_TASK_PARAM//-/ })
+		# log_debug "task params: ${SCOPE_TASK_PARAMS}"
+		# 处理bug
+		if [[ "$SCOPE_TASK_TYPE" == "@" ]]; then
+			if [[ ${#SCOPE_TASK_PARAMS[@]} == 1 ]]; then
+				log_debug "process_bug_finish ${SCOPE_TASK_PARAMS[0]}"
+				# process_bug_finish ${SCOPE_TASK_PARAMS[0]}
+			elif [[ ${#SCOPE_TASK_PARAMS[@]} == 2 ]]; then
+				log_debug "process_bug_log ${SCOPE_TASK_PARAMS[0]} ${SCOPE_TASK_PARAMS[1]}"
+				# process_bug_log ${SCOPE_TASK_PARAMS[0]} ${SCOPE_TASK_PARAMS[1]}
+			else
+				log_info "bad bug params number, 1 or 3 only"
+			fi
+		# 处理任务
+		elif [[ "$SCOPE_TASK_TYPE" == "#" ]]; then
+			if [[ ${#SCOPE_TASK_PARAMS[@]} == 1 ]]; then
+				log_debug "process_feature_finish ${SCOPE_TASK_PARAMS[0]}"
+				# process_feature_finish ${SCOPE_TASK_PARAMS[0]}
+			elif [[ ${#SCOPE_TASK_PARAMS[@]} == 3 ]]; then
+				log_debug "process_feature_log ${SCOPE_TASK_PARAMS[0]} ${SCOPE_TASK_PARAMS[1]} ${SCOPE_TASK_PARAMS[2]}"
+				# process_feature_log ${SCOPE_TASK_PARAMS[0]} ${SCOPE_TASK_PARAMS[1]} ${SCOPE_TASK_PARAMS[2]}
+			else
+				log_info "bad feature params number, 1 or 3 only"
+			fi
+		else
+			log_info "unknow task type, # or @ only"
+		fi
+	else
+		log_info "task format error ${SCOPE_TASK_PARAM}"
+	fi
+}
+
+#######################################################################
+# 记录神道任务日志 TODO
+process_bug_log(){
+    log_debug "process bug log $1 $2"
+    # 执行登录，如果已经登录则忽略
+    do_login
+    # 发送记录神道任务日志的请求
+    _URL="${ZT_HOST}/effort-createForObject-bug-${1}.json?onlybody=yes&${ZT_SESSION_NAME}=${ZT_SESSION}"
+    log_debug ${_URL}
+    _URL_CONTENT_TYPE="content-type: application/x-www-form-urlencoded"
+    _URL_FORM_DATA="id%5B1%5D=1&dates%5B1%5D=$(_date_fmt)&objectType%5B1%5D=bug&objectID%5B1%5D=${1}&consumed%5B1%5D=${2}&work%5B1%5D=${COMMIT_CONTENT}"
+    _RST=`$(_curl_bin) POST "${_URL}" -H "${_URL_CONTENT_TYPE}" -d "${_URL_FORM_DATA}"`
+    log_debug ${_RST}
+    if echo "${_RST}" | grep -w "login" &>/dev/null; then
+        log_info "post new log for bug[${1}] error"
+    fi
+    log_info "post log for bug[${1}] OK"
+}
+
+# 完成神道bug TODO
+process_bug_finish(){
+    log_debug "process bug finish $1"
+    # 执行登录，如果已经登录则忽略
+    do_login
+    # 获取神道BUG解决所需的信息 用时、抄送
+    _URL="${ZT_HOST}/bug-resolve-${1}.json?onlybody=yes&${ZT_SESSION_NAME}=${ZT_SESSION}"
+    # get infomations that finish task needed.
+    _RST=`$(_curl_bin) GET "${_URL}"`
+    if echo "${_RST}" | grep -vw "success" &>/dev/null; then
+        log_info "do resolve bug[${1}] error, unknow reason"
+    fi
+    # log_debug ${_RST}
+    CON_FINISH_ASSIGNED=$(_parse_json "${_RST}" "assignedTo")
+
+    # 发送完成神道任务的请求
+    _URL_CONTENT_TYPE="multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW"
+    _RST=`$(_curl_bin) POST "${_URL}" -H "${_URL_CONTENT_TYPE}" -F "comment=${COMMIT_CONTENT}" -F "assignedTo=${CON_FINISH_ASSIGNED}" -F "resolution=fixed" -F "resolvedDate=$(_date_fmt)"`
+    log_debug ${_RST}
+    if echo "${_RST}" | grep -w "login" &>/dev/null; then
+        log_info "do resolve bug[${1}] error, need login"
+    fi
+}
+
+#######################################################################
+# 记录神道任务日志
+process_feature_log(){
+    log_debug "process feature log $1 $2 $3"
+    # 执行登录，如果已经登录则忽略
+    do_login
+    # 发送记录神道任务日志的请求
+    _URL="${ZT_HOST}/effort-createForObject-task-${1}.json?onlybody=yes&${ZT_SESSION_NAME}=${ZT_SESSION}"
+    log_debug ${_URL}
+    _URL_CONTENT_TYPE="content-type: application/x-www-form-urlencoded"
+    _URL_FORM_DATA="id%5B1%5D=1&dates%5B1%5D=$(_date_fmt)&objectType%5B1%5D=task&consumed%5B1%5D=${2}&left%5B1%5D=${3}&objectID%5B1%5D=${1}&work%5B1%5D=${COMMIT_CONTENT}"
+    _RST=`$(_curl_bin) POST "${_URL}" -H "${_URL_CONTENT_TYPE}" -d "${_URL_FORM_DATA}"`
+    log_debug ${_RST}
+    if echo "${_RST}" | grep -w "login" &>/dev/null; then
+        log_info "post new log for task[${1}] error"
+    fi
+    log_info "post log for task[${1}] OK"
+}
+
+# 完成神道任务
+process_feature_finish(){
+    log_debug "process feature finish $1"
+    # 执行登录，如果已经登录则忽略
+    do_login
+    # 获取神道任务完成所需的信息 用时、抄送
+    _URL="${ZT_HOST}/task-finish-${1}.json?onlybody=yes&${ZT_SESSION_NAME}=${ZT_SESSION}"
+    # get infomations that finish task needed.
+    _RST=`$(_curl_bin) GET "${_URL}"`
+    if echo "${_RST}" | grep -vw "success" &>/dev/null; then
+        log_info "do finish task[${1}] error, unknow reason"
+    fi
+    # log_debug ${_RST}
+    CON_FINISH_CONSUMED=$(_parse_json "${_RST}" "consumed")
+    CON_FINISH_ASSIGNED=$(_parse_json "${_RST}" "assignedTo")
+
+    # 发送完成神道任务的请求
+    _URL_CONTENT_TYPE="multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW"
+    _RST=`$(_curl_bin) POST "${_URL}" -H "${_URL_CONTENT_TYPE}" -F "consumed=${CON_FINISH_CONSUMED}" -F "assignedTo=${CON_FINISH_ASSIGNED}" -F "finishedDate=$(_date_fmt)" -F "comment=${COMMIT_CONTENT}"`
+    log_debug ${_RST}
+    if echo "${_RST}" | grep -w "login" &>/dev/null; then
+        log_info "do finish task[${1}] error, need login"
+    fi
+}
+
+#######################################################################
+
+# 登录禅道
+do_login(){
+    if [[ ${ZT_LOGIN_OK} == 1 ]]; then
+        log_debug "already login"
+    elif [[ ${ZT_USER} == "" || ${ZT_PASS} == "" ]]; then
+        log_debug "no acount config for zentao"
+	else
+        do_get_session
+        log_debug "login action begin"
+        _URL="${ZT_HOST}/user-login.json?onlybody=yes&${ZT_SESSION_NAME}=${ZT_SESSION}"
+        _RST=`$(_curl_bin) POST "${_URL}" -H "cache-control: no-cache" -H "content-type: application/x-www-form-urlencoded" -d "account=${ZT_USER}&password=${ZT_PASS}&keepLogin=on"`
+        if echo "${_RST}" | grep -vw "success" &>/dev/null; then
+            ZT_LOGIN_OK=0
+            log_error_exit $ERR_LOGIN
+		else
+            ZT_LOGIN_OK=1
+            log_info "Login zentao OK [ ${ZT_USER} ]"
+        fi
+    fi
+}
+
+# 获取登录session
+do_get_session(){
+    log_debug "get session action begin"
+    _RST=`$(_curl_bin) GET $ZT_HOST/api-getsessionid.json`
+    if echo "${_RST}" | grep -vw "success" &>/dev/null; then
+        log_error_exit ${ERR_SESSION_RST}
+    fi
+    ZT_SESSION_NAME=$(_parse_json $_RST "sessionName")
+    log_debug "GET SESSION NAME: $ZT_SESSION_NAME"
+    ZT_SESSION=$(_parse_json $_RST "sessionID")
+    log_debug "GET SESSION ID: $ZT_SESSION"
+    if [[ $ZT_SESSION_NAME == "" || $ZT_SESSION == "" ]]; then
+        log_error_exit ${ERR_SESSION_DATA}
+    fi
+}
+
+#######################################################################
+
+main(){
+    validator
+    # log_error_exit "main->${ERR_DEBUG}"
+}
+
+main
+exit 0
