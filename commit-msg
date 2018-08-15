@@ -48,10 +48,10 @@
 set -u
 set -e
 
-ZT_HOST="http://pms.uama.com.cn"
-ZT_USER="luohao"
-ZT_PASS="Uama123"
-DEBUG_LEVEL=2
+ZT_HOST=""
+ZT_USER=""
+ZT_PASS=""
+DEBUG_LEVEL=1
 
 COMMIT_MSG_FILE=$1
 COMMIT_CONTENT=
