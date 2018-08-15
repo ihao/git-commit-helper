@@ -1,6 +1,6 @@
 #!/bin/bash
 ###  commit message helper
-###  luohao@uama.com.cn 2018 v0.2.0
+###  luohao@uama.com.cn 2018 v0.1.0
 #######################################################################
 ###  <type>(<scope>): <subject>
 ###  <BLANK LINE>
@@ -75,6 +75,8 @@ ZT_SESSION_NAME=
 
 _URL=
 _RST=
+
+_URL_CONTENT_TYPE="content-type: application/x-www-form-urlencoded"
 
 ERR_SESSION_RST="[ERROR]101: Get session request error"
 ERR_SESSION_DATA="[ERROR]102: Get session result error"
@@ -277,7 +279,6 @@ process_bug_log(){
     # 发送记录禅道任务日志的请求
     _URL="${ZT_HOST}/effort-createForObject-bug-${1}.json?onlybody=yes&${ZT_SESSION_NAME}=${ZT_SESSION}"
     log_debug ${_URL}
-    _URL_CONTENT_TYPE="content-type: application/x-www-form-urlencoded"
     _URL_FORM_DATA="id%5B1%5D=1&dates%5B1%5D=$(_date_fmt)&objectType%5B1%5D=bug&objectID%5B1%5D=${1}&consumed%5B1%5D=${2}&work%5B1%5D=${ENCODE_CONTENT}"
     _RST=`$(_curl_bin) POST "${_URL}" -H "${_URL_CONTENT_TYPE}" -d "${_URL_FORM_DATA}"`
     log_debug ${_RST}
@@ -303,8 +304,8 @@ process_bug_finish(){
     CON_FINISH_ASSIGNED=$(_parse_json "${_RST}" "assignedTo")
 
     # 发送完成禅道任务的请求
-    _URL_CONTENT_TYPE="multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW"
-    _RST=`$(_curl_bin) POST "${_URL}" -H "${_URL_CONTENT_TYPE}" -F "comment=${ENCODE_CONTENT}" -F "assignedTo=${CON_FINISH_ASSIGNED}" -F "resolution=fixed" -F "resolvedDate=$(_date_fmt)"`
+    _URL_FORM_DATA="resolution=fixed&assignedTo=${CON_FINISH_ASSIGNED}&resolvedDate=$(_date_fmt)&comment=${ENCODE_CONTENT}"
+    _RST=`$(_curl_bin) POST "${_URL}" -H "${_URL_CONTENT_TYPE}" -d "${_URL_FORM_DATA}"`
     log_debug ${_RST}
     if echo "${_RST}" | grep -w "login" &>/dev/null; then
         log_info "do resolve bug[${1}] error, need login"
@@ -320,7 +321,6 @@ process_feature_log(){
     # 发送记录禅道任务日志的请求
     _URL="${ZT_HOST}/effort-createForObject-task-${1}.json?onlybody=yes&${ZT_SESSION_NAME}=${ZT_SESSION}"
     log_debug ${_URL}
-    _URL_CONTENT_TYPE="content-type: application/x-www-form-urlencoded"
     _URL_FORM_DATA="id%5B1%5D=1&dates%5B1%5D=$(_date_fmt)&objectType%5B1%5D=task&consumed%5B1%5D=${2}&left%5B1%5D=${3}&objectID%5B1%5D=${1}&work%5B1%5D=${ENCODE_CONTENT}"
     log_debug $_URL_FORM_DATA
     _RST=`$(_curl_bin) POST "${_URL}" -H "${_URL_CONTENT_TYPE}" -d "${_URL_FORM_DATA}"`
@@ -348,8 +348,8 @@ process_feature_finish(){
     CON_FINISH_ASSIGNED=$(_parse_json "${_RST}" "assignedTo")
 
     # 发送完成禅道任务的请求
-    _URL_CONTENT_TYPE="multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW"
-    _RST=`$(_curl_bin) POST "${_URL}" -H "${_URL_CONTENT_TYPE}" -F "consumed=${CON_FINISH_CONSUMED}" -F "assignedTo=${CON_FINISH_ASSIGNED}" -F "finishedDate=$(_date_fmt)" -F "comment=${ENCODE_CONTENT}"`
+    _URL_FORM_DATA="consumed=${CON_FINISH_CONSUMED}&assignedTo=${CON_FINISH_ASSIGNED}&finishedDate=$(_date_fmt)&comment=${ENCODE_CONTENT}"
+    _RST=`$(_curl_bin) POST "${_URL}" -H "${_URL_CONTENT_TYPE}" -d "${_URL_FORM_DATA}"`
     log_debug ${_RST}
     if echo "${_RST}" | grep -w "login" &>/dev/null; then
         log_info "do finish task[${1}] error, need login"
