@@ -236,10 +236,10 @@ process(){
 		if [[ "$SCOPE_TASK_TYPE" == "@" ]]; then
 			if [[ ${#SCOPE_TASK_PARAMS[@]} == 1 ]]; then
 				log_debug "process_bug_finish ${SCOPE_TASK_PARAMS[0]}"
-				# process_bug_finish ${SCOPE_TASK_PARAMS[0]}
+				process_bug_finish ${SCOPE_TASK_PARAMS[0]}
 			elif [[ ${#SCOPE_TASK_PARAMS[@]} == 2 ]]; then
 				log_debug "process_bug_log ${SCOPE_TASK_PARAMS[0]} ${SCOPE_TASK_PARAMS[1]}"
-				# process_bug_log ${SCOPE_TASK_PARAMS[0]} ${SCOPE_TASK_PARAMS[1]}
+				process_bug_log ${SCOPE_TASK_PARAMS[0]} ${SCOPE_TASK_PARAMS[1]}
 			else
 				log_info "bad bug params number, 1 or 3 only"
 			fi
@@ -247,10 +247,10 @@ process(){
 		elif [[ "$SCOPE_TASK_TYPE" == "#" ]]; then
 			if [[ ${#SCOPE_TASK_PARAMS[@]} == 1 ]]; then
 				log_debug "process_feature_finish ${SCOPE_TASK_PARAMS[0]}"
-				# process_feature_finish ${SCOPE_TASK_PARAMS[0]}
+				process_feature_finish ${SCOPE_TASK_PARAMS[0]}
 			elif [[ ${#SCOPE_TASK_PARAMS[@]} == 3 ]]; then
 				log_debug "process_feature_log ${SCOPE_TASK_PARAMS[0]} ${SCOPE_TASK_PARAMS[1]} ${SCOPE_TASK_PARAMS[2]}"
-				# process_feature_log ${SCOPE_TASK_PARAMS[0]} ${SCOPE_TASK_PARAMS[1]} ${SCOPE_TASK_PARAMS[2]}
+				process_feature_log ${SCOPE_TASK_PARAMS[0]} ${SCOPE_TASK_PARAMS[1]} ${SCOPE_TASK_PARAMS[2]}
 			else
 				log_info "bad feature params number, 1 or 3 only"
 			fi
