@@ -163,7 +163,11 @@ validator(){
     COMMIT_FIRST_LINE=`echo "${COMMIT_CONTENT}" | head -1`
     COMMIT_TOTAL_LINE=`echo "${COMMIT_CONTENT}" | wc -l`
     validate_base_format
-    validate_scope_message
+    if [[ ${ZT_HOST} == "" || ${ZT_USER} == "" || ${ZT_PASS} == "" ]]; then
+        log_info "zentao config error, skip scope magic."
+    else
+        validate_scope_message
+    fi
 }
 
 validate_base_format(){
@@ -362,9 +366,7 @@ process_feature_finish(){
 do_login(){
     if [[ ${ZT_LOGIN_OK} == 1 ]]; then
         log_debug "already login"
-    elif [[ ${ZT_USER} == "" || ${ZT_PASS} == "" ]]; then
-        log_debug "no acount config for zentao"
-	else
+    else
         do_get_session
         log_debug "login action begin"
         _URL="${ZT_HOST}/user-login.json?onlybody=yes&${ZT_SESSION_NAME}=${ZT_SESSION}"
