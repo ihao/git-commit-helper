@@ -190,7 +190,7 @@ validate_base_format(){
         fi
     fi
     # 5. 检测第一行格式是否正确: Type(scope): title
-    if [[ ${COMMIT_FIRST_LINE} =~ ^(feat|fix|docs|style|refactor|perf|test|chore)([\(]?[0-9\#\@\,\-]*[\)]?):[[:blank:]]?(.*)$ ]]; then
+    if [[ ${COMMIT_FIRST_LINE} =~ ^(feat|fix|docs|style|refactor|perf|test|chore)([\(]?[0-9\#\@\,\-]*[\)]?)[[:blank:]]?:[[:blank:]]?(.*)$ ]]; then
         COMMIT_TYPE=${BASH_REMATCH[1]}
         COMMIT_SCOPE=${BASH_REMATCH[2]}
         COMMIT_SUBJECT=${BASH_REMATCH[3]}
@@ -244,10 +244,10 @@ process(){
 		if [[ "$SCOPE_TASK_TYPE" == "@" ]]; then
 			if [[ ${#SCOPE_TASK_PARAMS[@]} == 1 ]]; then
 				log_debug "process_bug_finish ${SCOPE_TASK_PARAMS[0]}"
-				# process_bug_finish ${SCOPE_TASK_PARAMS[0]}
+				process_bug_finish ${SCOPE_TASK_PARAMS[0]}
 			elif [[ ${#SCOPE_TASK_PARAMS[@]} == 2 ]]; then
 				log_debug "process_bug_log ${SCOPE_TASK_PARAMS[0]} ${SCOPE_TASK_PARAMS[1]}"
-				# process_bug_log ${SCOPE_TASK_PARAMS[0]} ${SCOPE_TASK_PARAMS[1]}
+				process_bug_log ${SCOPE_TASK_PARAMS[0]} ${SCOPE_TASK_PARAMS[1]}
 			else
 				log_info "bad bug params number, 1 or 3 only"
 			fi
